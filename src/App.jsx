@@ -5,7 +5,9 @@ import Home from "./components/Home";
 import Auth from "./Auth";
 
 export default function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+  return window.innerWidth >= 1024; // lg breakpoint
+});
 
   const toggleSidebar = () => setIsSidebarOpen((p) => !p);
 
