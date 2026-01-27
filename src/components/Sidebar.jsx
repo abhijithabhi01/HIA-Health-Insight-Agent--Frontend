@@ -2,6 +2,7 @@ import { Search, MessageSquarePlus, X, MoreVertical, Trash2, Edit2 } from 'lucid
 import { useState, useEffect, useRef } from 'react';
 import { chatAPI } from '../api/chat.api';
 import toast from 'react-hot-toast';
+import { confirmToast } from './ConfirmToast';
 
 export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSelect, onNewChat }) {
   const [chats, setChats] = useState([]);
@@ -64,31 +65,32 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
     }
   };
 
-  // Handle chat deletion
+  // Handle chat deletion with toast confirmation
   const handleDeleteChat = async (chatId, e) => {
     e?.stopPropagation();
     
-    if (!confirm('Are you sure you want to delete this chat?')) {
-      return;
-    }
-
-    try {
-      await chatAPI.deleteChat(chatId);
-      toast.success('Chat deleted');
-      
-      // Reload chats
-      await loadChats();
-      
-      // If deleted chat was active, clear it
-      if (currentChatId === chatId) {
-        await onNewChat();
+    confirmToast(
+      'Are you sure you want to delete this chat?',
+      async () => {
+        try {
+          await chatAPI.deleteChat(chatId);
+          toast.success('Chat deleted');
+          
+          // Reload chats
+          await loadChats();
+          
+          // If deleted chat was active, clear it
+          if (currentChatId === chatId) {
+            await onNewChat();
+          }
+          
+          setOpenMenuId(null);
+        } catch (err) {
+          console.error('Failed to delete chat:', err);
+          toast.error('Failed to delete chat');
+        }
       }
-      
-      setOpenMenuId(null);
-    } catch (err) {
-      console.error('Failed to delete chat:', err);
-      toast.error('Failed to delete chat');
-    }
+    );
   };
 
   // Open rename modal
@@ -492,19 +494,19 @@ function ChatItem({ chat, isActive, onClick, onDelete, onRename, isMenuOpen, onM
       {isMenuOpen && (
         <div
           ref={menuRef}
-          className="absolute right-2 top-10 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg py-1 w-40 z-50"
+          className="absolute right-2 top-10  w-44 bg-zinc-900 border border-zinc-900 rounded-xl shadow-lg overflow-hidden z-50"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={onRename}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-700 flex items-center gap-2 text-gray-200"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0"
           >
             <Edit2 size={14} />
             Rename
           </button>
           <button
             onClick={onDelete}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-700 flex items-center gap-2 text-red-400 hover:text-red-300"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0"
           >
             <Trash2 size={14} />
             Delete
