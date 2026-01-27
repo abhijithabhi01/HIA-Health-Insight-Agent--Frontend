@@ -1,19 +1,177 @@
-import { Search, Image, Grid3x3, Box, FolderKanban, MessageSquarePlus, X, } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { Search, MessageSquarePlus, X, MoreVertical, Trash2, Edit2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { chatAPI } from '../api/chat.api';
+import toast from 'react-hot-toast';
 
-export default function Sidebar({ isOpen, toggleSidebar }) {
-  const chats = [
-    'Patient Care Plan',
-    'Medication Analysis',
-    'Symptom Checker',
-    'Lab Results Review',
-    'Health Risk Assessment',
-    'Nutrition Guidance',
-    'Exercise Recommendations',
-    'Mental Health Support',
-  ];
+export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSelect, onNewChat }) {
+  const [chats, setChats] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameChatId, setRenameChatId] = useState(null);
+  const [newChatTitle, setNewChatTitle] = useState('');
+
+  // Load all chats on mount
+  useEffect(() => {
+    loadChats();
+  }, []);
+
+  // Load user's chats
+  const loadChats = async () => {
+    try {
+      const res = await chatAPI.getAllChats();
+      setChats(res.data);
+    } catch (err) {
+      console.error('Failed to load chats:', err);
+    }
+  };
+
+  // Handle search
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const res = await chatAPI.searchChats(query);
+      setSearchResults(res.data);
+    } catch (err) {
+      console.error('Search failed:', err);
+      setSearchResults([]);
+    }
+  };
+
+  // Handle new chat creation
+  const handleNewChat = async () => {
+    try {
+      // Call the parent's new chat handler
+      await onNewChat();
+      
+      // Reload chats to show the new one
+      await loadChats();
+      
+      // Close sidebar on mobile
+      if (window.innerWidth < 1024) {
+        toggleSidebar();
+      }
+    } catch (err) {
+      console.error('Failed to create new chat:', err);
+    }
+  };
+
+  // Handle chat deletion
+  const handleDeleteChat = async (chatId, e) => {
+    e?.stopPropagation();
+    
+    if (!confirm('Are you sure you want to delete this chat?')) {
+      return;
+    }
+
+    try {
+      await chatAPI.deleteChat(chatId);
+      toast.success('Chat deleted');
+      
+      // Reload chats
+      await loadChats();
+      
+      // If deleted chat was active, clear it
+      if (currentChatId === chatId) {
+        await onNewChat();
+      }
+      
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error('Failed to delete chat:', err);
+      toast.error('Failed to delete chat');
+    }
+  };
+
+  // Open rename modal
+  const handleOpenRename = (chatId, currentTitle, e) => {
+    e?.stopPropagation();
+    setRenameChatId(chatId);
+    setNewChatTitle(currentTitle);
+    setRenameModalOpen(true);
+    setOpenMenuId(null);
+  };
+
+  // Handle chat rename
+  const handleRenameChat = async () => {
+    if (!newChatTitle.trim()) {
+      toast.error('Chat title cannot be empty');
+      return;
+    }
+
+    try {
+      await chatAPI.updateChat(renameChatId, { title: newChatTitle });
+      toast.success('Chat renamed');
+      
+      // Reload chats
+      await loadChats();
+      
+      setRenameModalOpen(false);
+      setRenameChatId(null);
+      setNewChatTitle('');
+    } catch (err) {
+      console.error('Failed to rename chat:', err);
+      toast.error('Failed to rename chat');
+    }
+  };
+
+  // Handle chat selection
+  const handleChatSelect = (chatId) => {
+    onChatSelect(chatId);
+    
+    // Close sidebar on mobile
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+  };
+
+  // Group chats by date
+  const groupChatsByDate = (chats) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const grouped = {
+      today: [],
+      yesterday: [],
+      previous7Days: [],
+      previous30Days: [],
+      older: []
+    };
+
+    chats.forEach(chat => {
+      const chatDate = new Date(chat.updatedAt);
+      
+      if (chatDate >= today) {
+        grouped.today.push(chat);
+      } else if (chatDate >= yesterday) {
+        grouped.yesterday.push(chat);
+      } else if (chatDate >= sevenDaysAgo) {
+        grouped.previous7Days.push(chat);
+      } else if (chatDate >= thirtyDaysAgo) {
+        grouped.previous30Days.push(chat);
+      } else {
+        grouped.older.push(chat);
+      }
+    });
+
+    return grouped;
+  };
+
+  const groupedChats = groupChatsByDate(chats);
 
   return (
     <>
@@ -32,11 +190,9 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
   ${isOpen ? 'w-72' : 'w-0'}
   overflow-hidden`}
       >
-
-
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="p-4  flex items-center justify-between">
+          <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-2 font-medium">
               <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-sm">
                 HIA
@@ -49,37 +205,139 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
           </div>
 
           {/* Menu */}
-          <div className="p-3 space-y-1 text-sm text-gray-300 ">
-            <Link
-              style={{ textDecoration: 'none', color: 'white' }}
-              to="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-2 p-2 rounded hover:bg-zinc-900"
+          <div className="p-3 space-y-1 text-sm text-gray-300">
+            <button
+              onClick={handleNewChat}
+              className="w-full flex items-center gap-2 p-2 rounded hover:bg-zinc-900 transition"
             >
               <MessageSquarePlus size={16} /> New chat
-            </Link>
+            </button>
 
-            <Link
-            style={{ textDecoration: 'none', color: 'white' }}
+            <button
               onClick={() => setSearchOpen(true)}
-              className="w-full flex items-center gap-2 p-2 rounded hover:bg-zinc-900"
+              className="w-full flex items-center gap-2 p-2 rounded hover:bg-zinc-900 transition"
             >
               <Search size={16} /> Search chats
-            </Link>
+            </button>
           </div>
 
           {/* Chats */}
-          <div className="flex-1 overflow-y-auto px-3">
-            <p className="text-xs text-gray-500 mb-2">Your chats</p>
-            {chats.map((chat, i) => (
-              <div
-                key={i}
-                className="px-3 py-2 rounded hover:bg-zinc-900 cursor-pointer text-sm"
-              >
-                {chat}
-              </div>
-            ))}
+          <div className="flex-1 overflow-y-auto px-3 pb-4">
+            {chats.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-4">No chats yet</p>
+            ) : (
+              <>
+                {/* Today */}
+                {groupedChats.today.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2 mt-2">Today</p>
+                    {groupedChats.today.map((chat) => (
+                      <ChatItem
+                        key={chat._id}
+                        chat={chat}
+                        isActive={currentChatId === chat._id}
+                        onClick={() => handleChatSelect(chat._id)}
+                        onDelete={(e) => handleDeleteChat(chat._id, e)}
+                        onRename={(e) => handleOpenRename(chat._id, chat.title, e)}
+                        isMenuOpen={openMenuId === chat._id}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === chat._id ? null : chat._id);
+                        }}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Yesterday */}
+                {groupedChats.yesterday.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2 mt-4">Yesterday</p>
+                    {groupedChats.yesterday.map((chat) => (
+                      <ChatItem
+                        key={chat._id}
+                        chat={chat}
+                        isActive={currentChatId === chat._id}
+                        onClick={() => handleChatSelect(chat._id)}
+                        onDelete={(e) => handleDeleteChat(chat._id, e)}
+                        onRename={(e) => handleOpenRename(chat._id, chat.title, e)}
+                        isMenuOpen={openMenuId === chat._id}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === chat._id ? null : chat._id);
+                        }}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Previous 7 Days */}
+                {groupedChats.previous7Days.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2 mt-4">Previous 7 Days</p>
+                    {groupedChats.previous7Days.map((chat) => (
+                      <ChatItem
+                        key={chat._id}
+                        chat={chat}
+                        isActive={currentChatId === chat._id}
+                        onClick={() => handleChatSelect(chat._id)}
+                        onDelete={(e) => handleDeleteChat(chat._id, e)}
+                        onRename={(e) => handleOpenRename(chat._id, chat.title, e)}
+                        isMenuOpen={openMenuId === chat._id}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === chat._id ? null : chat._id);
+                        }}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Previous 30 Days */}
+                {groupedChats.previous30Days.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2 mt-4">Previous 30 Days</p>
+                    {groupedChats.previous30Days.map((chat) => (
+                      <ChatItem
+                        key={chat._id}
+                        chat={chat}
+                        isActive={currentChatId === chat._id}
+                        onClick={() => handleChatSelect(chat._id)}
+                        onDelete={(e) => handleDeleteChat(chat._id, e)}
+                        onRename={(e) => handleOpenRename(chat._id, chat.title, e)}
+                        isMenuOpen={openMenuId === chat._id}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === chat._id ? null : chat._id);
+                        }}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Older */}
+                {groupedChats.older.length > 0 && (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2 mt-4">Older</p>
+                    {groupedChats.older.map((chat) => (
+                      <ChatItem
+                        key={chat._id}
+                        chat={chat}
+                        isActive={currentChatId === chat._id}
+                        onClick={() => handleChatSelect(chat._id)}
+                        onDelete={(e) => handleDeleteChat(chat._id, e)}
+                        onRename={(e) => handleOpenRename(chat._id, chat.title, e)}
+                        isMenuOpen={openMenuId === chat._id}
+                        onMenuToggle={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === chat._id ? null : chat._id);
+                        }}
+                      />
+                    ))}
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       </aside>
@@ -88,19 +346,25 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
       {searchOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="relative w-full max-w-lg bg-zinc-900 rounded-2xl shadow-xl">
-
             {/* HEADER */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
+              <Search size={16} className="text-gray-400" />
               <input
                 type="text"
                 placeholder="Search chats..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="flex-1 bg-transparent outline-none text-sm text-gray-200 placeholder-gray-500"
                 autoFocus
               />
 
               {/* CLOSE */}
               <button
-                onClick={() => setSearchOpen(false)}
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
                 className="text-gray-400 hover:text-white"
               >
                 ✕
@@ -109,39 +373,144 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
             {/* RESULTS */}
             <div className="max-h-[60vh] overflow-y-auto p-2">
-              <div className="p-3 rounded-lg hover:bg-zinc-800 cursor-pointer">
-                ✏️ New chat
-              </div>
-
-              <p className="px-3 py-2 text-xs text-gray-400">Today</p>
-              <ChatItem title="Responsive HIA Frontend Fix" />
-
-              <p className="px-3 py-2 text-xs text-gray-400">Previous 7 Days</p>
-              <ChatItem title="Internship request update" />
-              <ChatItem title="MCA deep learning project ideas" />
-              <ChatItem title="Kaggle Day 1a Summary" />
-              <ChatItem title="Kaggle internet access error" />
+              {searchQuery.trim() === '' ? (
+                <div className="p-4 text-center text-gray-400 text-sm">
+                  Type to search your chats...
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="p-4 text-center text-gray-400 text-sm">
+                  No chats found
+                </div>
+              ) : (
+                searchResults.map((chat) => (
+                  <div
+                    key={chat._id}
+                    onClick={() => {
+                      handleChatSelect(chat._id);
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                      setSearchResults([]);
+                    }}
+                    className="px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm flex items-center gap-2"
+                  >
+                    💬 {chat.title}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
 
+      {/* Rename Modal */}
+      {renameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="relative w-full max-w-md bg-zinc-900 rounded-2xl shadow-xl p-6">
+            <h2 className="text-lg font-semibold mb-4">Rename Chat</h2>
+            
+            <input
+              type="text"
+              value={newChatTitle}
+              onChange={(e) => setNewChatTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleRenameChat();
+                } else if (e.key === 'Escape') {
+                  setRenameModalOpen(false);
+                }
+              }}
+              placeholder="Enter new chat name"
+              className="w-full bg-zinc-800 px-4 py-2 rounded-lg outline-none text-sm text-gray-200 placeholder-gray-500 border border-zinc-700 focus:border-blue-500"
+              autoFocus
+            />
+
+            <div className="flex gap-2 mt-4 justify-end">
+              <button
+                onClick={() => {
+                  setRenameModalOpen(false);
+                  setRenameChatId(null);
+                  setNewChatTitle('');
+                }}
+                className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRenameChat}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm transition"
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function SidebarButton({ icon, label }) {
+function ChatItem({ chat, isActive, onClick, onDelete, onRename, isMenuOpen, onMenuToggle }) {
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        if (isMenuOpen) {
+          onMenuToggle(event);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
   return (
-    <button className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-zinc-900">
-      {icon}
-      {label}
-    </button>
-  );
-}
-function ChatItem({ title }) {
-  return (
-    <div className="px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm flex items-center gap-2">
-      💬 {title}
+    <div
+      onClick={onClick}
+      className={`group relative px-3 py-2 rounded hover:bg-zinc-900 cursor-pointer text-sm transition flex items-center justify-between ${
+        isActive ? 'bg-zinc-800 text-white' : 'text-gray-300'
+      }`}
+      title={chat.title}
+    >
+      <span className="truncate flex-1">{chat.title}</span>
+      
+      {/* Menu Button - Shows on hover or when active */}
+      <button
+        onClick={onMenuToggle}
+        className={`p-1 rounded hover:bg-zinc-700 transition ${
+          isMenuOpen || isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+      >
+        <MoreVertical size={16} />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isMenuOpen && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-10 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg py-1 w-40 z-50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={onRename}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-700 flex items-center gap-2 text-gray-200"
+          >
+            <Edit2 size={14} />
+            Rename
+          </button>
+          <button
+            onClick={onDelete}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-700 flex items-center gap-2 text-red-400 hover:text-red-300"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 }

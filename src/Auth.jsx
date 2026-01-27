@@ -1,38 +1,84 @@
 import { useState } from "react";
 import { Mail, Lock, User } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { authAPI } from "./api/auth.api";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
+
+  function handleChange(e) {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  }
+
+async function handleSubmit(e) {
+  e.preventDefault();
+
+  if (!form.email || !form.password) {
+    toast.error("Email and password are required");
+    return;
+  }
+
+  if (!isLogin && form.password !== form.confirmPassword) {
+    toast.error("Passwords do not match");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    if (isLogin) {
+      // LOGIN
+      const res = await authAPI.login(form.email, form.password);
+      localStorage.setItem("token", res.data.token);
+toast.success("Login successful");
+navigate("/", { replace: true });
+
+
+    } else {
+      // REGISTER
+      await authAPI.register(form.name, form.email, form.password);
+      toast.success("Account created! Please login");
+      setIsLogin(true);
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.error || "Authentication failed");
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   return (
     <div className="min-h-screen w-full bg-black flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-xl p-8">
-        
-            <Link to="/">
-            <button
-            
-                    className="p-2 rounded-full border border-zinc-700 hover:bg-zinc-800 transition"
-                    title="Toggle sidebar"
-                >
-                    <svg
-                        className="w-5 h-5 text-gray-300"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d='M15 19l-7-7 7-7'
-                        />
+        {/* Back */}
+        <Link to="/">
+          <button className="p-2 rounded-full border border-zinc-700 hover:bg-zinc-800 transition">
+            <svg
+              className="w-5 h-5 text-gray-300"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        </Link>
 
-                    </svg>
-                </button>
-            </Link>
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 mt-4">
           <div className="w-14 h-14 mx-auto mb-4 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
             HIA
           </div>
@@ -47,12 +93,14 @@ export default function Auth() {
         </div>
 
         {/* Form */}
-        <form className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <InputField
               icon={<User size={18} />}
               placeholder="Full Name"
-              type="text"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
             />
           )}
 
@@ -60,12 +108,18 @@ export default function Auth() {
             icon={<Mail size={18} />}
             placeholder="Email address"
             type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
           />
 
           <InputField
             icon={<Lock size={18} />}
             placeholder="Password"
             type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
           />
 
           {!isLogin && (
@@ -73,14 +127,22 @@ export default function Auth() {
               icon={<Lock size={18} />}
               placeholder="Confirm Password"
               type="password"
+              name="confirmPassword"
+              value={form.confirmPassword}
+              onChange={handleChange}
             />
           )}
 
           <button
             type="submit"
-            className="w-full mt-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 transition text-white py-2.5 rounded-xl font-medium"
+            disabled={loading}
+            className="w-full mt-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 transition text-white py-2.5 rounded-xl font-medium disabled:opacity-60"
           >
-            {isLogin ? "Login" : "Sign up"}
+            {loading
+              ? "Please wait..."
+              : isLogin
+              ? "Login"
+              : "Sign up"}
           </button>
         </form>
 
@@ -107,7 +169,7 @@ export default function Auth() {
   );
 }
 
-/* ---------------- Reusable Input ---------------- */
+/* ---------------- Input ---------------- */
 
 function InputField({ icon, ...props }) {
   return (
