@@ -22,4 +22,8 @@ export const chatAPI = {
 
   // Delete chat
   deleteChat: (chatId) => client.delete(`/chats/${chatId}`),
+  // Rename chat
+  renameChat: (chatId, title) =>
+    client.put(`/chats/${chatId}/rename`, { title }),
+
 };

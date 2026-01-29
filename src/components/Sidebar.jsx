@@ -103,27 +103,29 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   };
 
   // Handle chat rename
-  const handleRenameChat = async () => {
-    if (!newChatTitle.trim()) {
-      toast.error('Chat title cannot be empty');
-      return;
-    }
+const handleRenameChat = async () => {
+  if (!newChatTitle.trim()) {
+    toast.error('Chat title cannot be empty');
+    return;
+  }
 
-    try {
-      await chatAPI.updateChat(renameChatId, { title: newChatTitle });
-      toast.success('Chat renamed');
-      
-      // Reload chats
-      await loadChats();
-      
-      setRenameModalOpen(false);
-      setRenameChatId(null);
-      setNewChatTitle('');
-    } catch (err) {
-      console.error('Failed to rename chat:', err);
-      toast.error('Failed to rename chat');
-    }
-  };
+  try {
+    await chatAPI.renameChat(renameChatId, newChatTitle);
+
+    toast.success('Chat renamed');
+
+    // Reload chats so sidebar updates
+    await loadChats();
+
+    setRenameModalOpen(false);
+    setRenameChatId(null);
+    setNewChatTitle('');
+  } catch (err) {
+    console.error('Failed to rename chat:', err);
+    toast.error('Failed to rename chat');
+  }
+};
+
 
   // Handle chat selection
   const handleChatSelect = (chatId) => {
@@ -174,6 +176,8 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   };
 
   const groupedChats = groupChatsByDate(chats);
+
+
 
   return (
     <>
@@ -506,7 +510,7 @@ function ChatItem({ chat, isActive, onClick, onDelete, onRename, isMenuOpen, onM
           </button>
           <button
             onClick={onDelete}
-            className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0"
+            className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0 text-red-400"
           >
             <Trash2 size={14} />
             Delete
