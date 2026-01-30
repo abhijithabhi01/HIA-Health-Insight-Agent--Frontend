@@ -2,7 +2,27 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { LogIn, LogOut, Trash2, Share2, User } from "lucide-react";
+import { confirmToast } from "./ConfirmToast";
+import { authAPI } from "../api/auth.api";
 
+
+// Handle account deletion
+function handleDeleteAccount() {
+  confirmToast(
+    "This will permanently delete your account. This action cannot be undone.",
+    async () => {
+      try {
+        await authAPI.deleteAccount();
+        localStorage.removeItem("token");
+        toast.success("Account deleted successfully");
+        window.location.reload();
+        navigate("/auth", { replace: true });
+      } catch (err) {
+        toast.error("Failed to delete account");
+      }
+    }
+  );
+}
 
 export default function UserMenu({ onDeleteChat, onShareChat }) {
   const [open, setOpen] = useState(false);
@@ -18,15 +38,15 @@ export default function UserMenu({ onDeleteChat, onShareChat }) {
   }
 
   useEffect(() => {
-  function handleClickOutside(e) {
-    if (menuRef.current && !menuRef.current.contains(e.target)) {
-      setOpen(false);
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
     }
-  }
 
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => document.removeEventListener("mousedown", handleClickOutside);
-}, []);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -62,6 +82,13 @@ export default function UserMenu({ onDeleteChat, onShareChat }) {
                 className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0 text-red-400"
               >
                 <Trash2 size={16} /> Delete Chat
+              </button>
+
+              <button
+                onClick={handleDeleteAccount}
+                className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 text-red-500"
+              >
+                <Trash2 size={16} /> Delete Account
               </button>
 
               <div className="h-px bg-zinc-800" />

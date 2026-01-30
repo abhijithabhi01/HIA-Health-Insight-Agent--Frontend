@@ -1,15 +1,33 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
 import Home from "./components/Home";
 import Auth from "./Auth";
 
 export default function App() {
+  const [isAuth, setIsAuth] = useState(
+    () => !!localStorage.getItem("token")
+  );
+
   return (
     <Routes>
-      {/* AUTH ROUTE */}
-      <Route path="/auth" element={<Auth />} />
+      {/* AUTH */}
+      <Route
+        path="/auth"
+        element={
+          isAuth ? <Navigate to="/" replace /> : <Auth setIsAuth={setIsAuth} />
+        }
+      />
 
-      {/* MAIN APP - Home component handles everything including sidebar */}
-      <Route path="/" element={<Home />} />
+      {/* HOME */}
+      <Route
+        path="/"
+        element={
+          isAuth ? <Home /> : <Navigate to="/auth" replace />
+        }
+      />
+
+      {/* FALLBACK */}
+      <Route path="*" element={<Navigate to="/auth" replace />} />
     </Routes>
   );
 }

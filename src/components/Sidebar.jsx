@@ -113,10 +113,7 @@ const handleRenameChat = async () => {
     await chatAPI.renameChat(renameChatId, newChatTitle);
 
     toast.success('Chat renamed');
-
-    // Reload chats so sidebar updates
     await loadChats();
-
     setRenameModalOpen(false);
     setRenameChatId(null);
     setNewChatTitle('');

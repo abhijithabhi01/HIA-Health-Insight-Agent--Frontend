@@ -3,6 +3,7 @@ import UserMenu from "./UserMenu";
 import Sidebar from "./Sidebar";
 import { useNavigate } from "react-router-dom";
 import { chatAPI } from "../api/chat.api";
+import { analysisAPI } from "../api/analysis.api";
 import toast from 'react-hot-toast';
 import { confirmToast } from './ConfirmToast';
 
@@ -16,8 +17,9 @@ export default function Home() {
   const navigate = useNavigate();
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    return window.innerWidth >= 1024; // Open by default on desktop
+    return window.innerWidth >= 1024;
   });
 
   // Toggle sidebar
@@ -30,14 +32,13 @@ export default function Home() {
     try {
       const res = await chatAPI.getChatById(chatId);
       setCurrentChatId(res.data._id);
-      
-      // Map backend format (content) to frontend format (text)
+
       const mappedMessages = (res.data.messages || []).map(msg => ({
         role: msg.role,
-        text: msg.content, // Backend uses 'content', frontend uses 'text'
+        text: msg.content,
         files: msg.files || []
       }));
-      
+
       setMessages(mappedMessages);
     } catch (err) {
       console.error('Failed to load chat:', err);
@@ -53,12 +54,11 @@ export default function Home() {
   // Handle new chat creation
   const handleNewChat = async () => {
     try {
-      // Clear current chat state
       setMessages([]);
       setCurrentChatId(null);
       setInput('');
       setFiles([]);
-      
+
       toast.success('New chat started');
     } catch (err) {
       console.error('Failed to start new chat:', err);
@@ -80,14 +80,59 @@ export default function Home() {
     setFiles((prev) => [...prev, ...processed]);
   };
 
-  // Remove file handler function 
+  // Remove file handler
   const removeFile = (id) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // Send message
+  // 🔥 NEW: Analyze uploaded file
+  const analyzeFile = async (fileObj) => {
+    try {
+      setIsAnalyzing(true);
+
+      toast.loading('Analyzing your report...', { id: 'analyzing' });
+
+      // Call upload API
+      const res = await analysisAPI.uploadAndAnalyze(fileObj.file);
+
+      toast.success('Analysis complete!', { id: 'analyzing' });
+
+      // Add analysis result to messages
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "user",
+          text: "📄 Uploaded medical report for analysis",
+          files: [fileObj]
+        },
+        {
+          role: "assistant",
+          text: res.data.insight,
+          files: []
+        }
+      ]);
+
+      // Clear files
+      setFiles([]);
+
+    } catch (err) {
+      console.error('Analysis error:', err);
+      toast.error(err.response?.data?.error || 'Failed to analyze report', { id: 'analyzing' });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Send message (regular chat or with analysis)
   const sendMessage = async () => {
-    if (!input.trim() && files.length === 0) return;
+    // If there are files, trigger analysis instead of regular chat
+    if (files.length > 0) {
+      // Analyze the first file (you can modify to handle multiple)
+      await analyzeFile(files[0]);
+      return;
+    }
+
+    if (!input.trim()) return;
 
     let chatId = currentChatId;
     const userText = input;
@@ -100,22 +145,19 @@ export default function Home() {
         setCurrentChatId(chatId);
       }
 
-      // 1️⃣ Show user message immediately
+      // Show user message
       setMessages((prev) => [
         ...prev,
-        { role: "user", text: userText, files },
+        { role: "user", text: userText, files: [] },
       ]);
 
       setInput("");
-      setFiles([]);
-
-      // 2️⃣ Show typing indicator
       setIsTyping(true);
 
-      // 3️⃣ Call backend
+      // Call backend
       const res = await chatAPI.sendMessage(chatId, userText);
 
-      // 4️⃣ Replace typing with assistant response
+      // Show assistant response
       setMessages((prev) => [
         ...prev,
         { role: "assistant", text: res.data.reply, files: [] },
@@ -149,47 +191,40 @@ export default function Home() {
     );
   }
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, isAnalyzing]);
 
-  // Helper function to format message text with proper line breaks and styling
+  // Format message text with proper styling
   const formatMessageText = (text) => {
     if (!text) return null;
 
-    // Split by newlines and process each line
     const lines = text.split('\n');
-    
+
     return (
       <div className="space-y-2">
         {lines.map((line, index) => {
-          // Skip empty lines
           if (!line.trim()) return <div key={index} className="h-2"></div>;
 
-          // Check if line is a bullet point
-          const isBullet = line.trim().startsWith('•') || 
-                          line.trim().startsWith('-') || 
-                          line.trim().startsWith('*') ||
-                          /^\d+\./.test(line.trim());
+          const isBullet = line.trim().startsWith('•') ||
+            line.trim().startsWith('-') ||
+            line.trim().startsWith('*') ||
+            /^\d+\./.test(line.trim());
 
-          // Check if line contains bold text (**text**)
           const hasBold = line.includes('**');
 
           if (isBullet) {
-            // Process bullet point line
             let content = line.trim();
-            // Remove bullet character if present
             content = content.replace(/^[•\-*]\s*/, '').replace(/^\d+\.\s*/, '');
-            
-            // Handle bold text
+
             if (hasBold) {
               const parts = content.split(/\*\*(.*?)\*\*/g);
               return (
                 <div key={index} className="flex gap-2 items-start">
                   <span className="text-blue-400 mt-1">•</span>
                   <span className="flex-1">
-                    {parts.map((part, i) => 
+                    {parts.map((part, i) =>
                       i % 2 === 1 ? <strong key={i} className="font-semibold text-gray-200">{part}</strong> : part
                     )}
                   </span>
@@ -205,12 +240,11 @@ export default function Home() {
             );
           }
 
-          // Regular line (not a bullet)
           if (hasBold) {
             const parts = line.split(/\*\*(.*?)\*\*/g);
             return (
               <div key={index}>
-                {parts.map((part, i) => 
+                {parts.map((part, i) =>
                   i % 2 === 1 ? <strong key={i} className="font-semibold text-gray-200">{part}</strong> : part
                 )}
               </div>
@@ -277,10 +311,28 @@ export default function Home() {
         {/* Chat Area */}
         <section className="flex-1 overflow-y-auto px-4 py-6">
           {messages.length === 0 && (
-            <div className="h-full flex items-center justify-center">
-              <h1 className="text-3xl font-light text-gray-300">
+            <div className="h-full flex flex-col items-center justify-center gap-6">
+              <h1 className="text-3xl font-light text-gray-300 text-center">
                 Simplifying your health data into meaningful insights.
               </h1>
+
+              {/* Upload hint */}
+              <div className="flex flex-col items-center gap-3 text-gray-400 text-sm">
+                <svg
+                  className="w-12 h-12 text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <p>Upload a medical report image or PDF to get started</p>
+              </div>
             </div>
           )}
 
@@ -291,10 +343,8 @@ export default function Home() {
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div className="bg-zinc-900 px-4 py-3 rounded-xl max-w-[75%] text-sm">
-                  {/* MESSAGE TEXT */}
                   {formatMessageText(msg.text)}
 
-                  {/* FILES INSIDE CHAT */}
                   {msg.files && msg.files.length > 0 && (
                     <div className="flex gap-2 mt-3 flex-wrap">
                       {msg.files.map((f) => (
@@ -311,7 +361,7 @@ export default function Home() {
                             />
                           ) : (
                             <div className="w-24 h-24 rounded-lg border border-zinc-700 flex items-center justify-center text-xs bg-zinc-800">
-                              PDF
+                              📄 PDF
                             </div>
                           )}
                         </div>
@@ -322,10 +372,10 @@ export default function Home() {
               </div>
             ))}
 
-            {isTyping && (
+            {(isTyping || isAnalyzing) && (
               <div className="flex justify-start">
                 <div className="bg-zinc-900 px-4 py-3 rounded-xl text-sm italic text-gray-400">
-                  HIA is analyzing your data...
+                  {isAnalyzing ? '🔍 Analyzing your medical report...' : 'HIA is thinking...'}
                 </div>
               </div>
             )}
@@ -338,7 +388,7 @@ export default function Home() {
         <footer className="shrink-0 border-t border-zinc-800 px-4 py-4">
           <div className="w-full px-4 sm:px-6 lg:px-24">
             <div className="bg-zinc-900 rounded-2xl px-3 py-2 flex flex-col gap-2">
-              {/* FILE PREVIEWS (INLINE) */}
+              {/* FILE PREVIEWS */}
               {files.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
                   {files.map((f) => (
@@ -355,11 +405,10 @@ export default function Home() {
                         />
                       ) : (
                         <div className="w-16 h-16 rounded-lg border border-zinc-700 flex items-center justify-center text-xs bg-zinc-800">
-                          PDF
+                          📄 PDF
                         </div>
                       )}
 
-                      {/* CLOSE BUTTON */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -376,13 +425,22 @@ export default function Home() {
 
               {/* INPUT ROW */}
               <div className="flex items-center gap-2">
-                {/* + BUTTON */}
                 <button
                   onClick={() => fileInputRef.current.click()}
-                  className="p-2 rounded-full hover:bg-zinc-800 text-gray-300"
+                  className="
+    w-10 h-10
+    flex items-center justify-center
+    rounded-full
+    bg-zinc-800
+    text-gray-300
+    hover:bg-zinc-100 hover:text-gray-800
+    transition
+  "
+                  title="Upload medical report"
                 >
                   +
                 </button>
+
 
                 <input
                   ref={fileInputRef}
@@ -397,23 +455,26 @@ export default function Home() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Ask anything"
+                  placeholder={files.length > 0 ? "Press Enter to analyze..." : "Ask anything or upload a report"}
                   className="flex-1 bg-transparent outline-none text-sm text-gray-200 placeholder-gray-500"
                 />
-
                 <button
                   onClick={sendMessage}
-                  disabled={!input.trim() && files.length === 0}
+                  disabled={(!input.trim() && files.length === 0) || isAnalyzing}
                   className={`
-                    rounded-full transition
-                    ${input.trim() || files.length
-                      ? "bg-white text-black hover:bg-gray-200"
-                      : "text-gray-500"
+                    w-10 h-10
+                    flex items-center justify-center
+                    rounded-full
+                    transition
+    ${(input.trim() || files.length > 0) && !isAnalyzing
+                      ? "bg-blue-500 text-white hover:bg-blue-600"
+                      : "bg-zinc-800 text-gray-500"
                     }
-                  `}
+  `}
                 >
-                  ➤
+                  {files.length > 0 ? '🔍' : '➤'}
                 </button>
+
               </div>
             </div>
           </div>
@@ -421,26 +482,24 @@ export default function Home() {
 
         {/* Preview Modal */}
         {preview && (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
             <div className="relative max-w-4xl w-full h-[90vh] bg-zinc-950 rounded-xl p-4">
-              {/* CLOSE BUTTON */}
               <button
                 onClick={() => setPreview(null)}
                 className="absolute rounded-full bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center"
-                style={{ 
-                  top: '-20px', 
-                  right: '10px', 
-                  width: '30px', 
-                  height: '30px', 
-                  color: "red", 
-                  fontSize: "20px", 
-                  fontWeight: "bold" 
+                style={{
+                  top: '-20px',
+                  right: '10px',
+                  width: '30px',
+                  height: '30px',
+                  color: "red",
+                  fontSize: "20px",
+                  fontWeight: "bold"
                 }}
               >
                 ✕
               </button>
 
-              {/* CONTENT */}
               {preview.type === "image" ? (
                 <img
                   src={preview.url}

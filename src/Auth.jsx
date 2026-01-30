@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { authAPI } from "./api/auth.api";
 
-export default function Auth() {
+export default function Auth({ setIsAuth }) {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({
     name: "",
@@ -21,42 +21,45 @@ export default function Auth() {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
-async function handleSubmit(e) {
-  e.preventDefault();
+  async function handleSubmit(e) {
+    e.preventDefault();
 
-  if (!form.email || !form.password) {
-    toast.error("Email and password are required");
-    return;
-  }
-
-  if (!isLogin && form.password !== form.confirmPassword) {
-    toast.error("Passwords do not match");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    if (isLogin) {
-      // LOGIN
-      const res = await authAPI.login(form.email, form.password);
-      localStorage.setItem("token", res.data.token);
-toast.success("Login successful");
-navigate("/", { replace: true });
-
-
-    } else {
-      // REGISTER
-      await authAPI.register(form.name, form.email, form.password);
-      toast.success("Account created! Please login");
-      setIsLogin(true);
+    if (!form.email || !form.password) {
+      toast.error("Email and password are required");
+      return;
     }
-  } catch (err) {
-    toast.error(err.response?.data?.error || "Authentication failed");
-  } finally {
-    setLoading(false);
+
+    if (!isLogin && form.password !== form.confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      if (isLogin) {
+        // LOGIN
+        const res = await authAPI.login(form.email, form.password);
+        localStorage.setItem("token", res.data.token);
+        setIsAuth(true);
+        toast.success("Login successful");
+        navigate("/", { replace: true });
+
+
+      } else {
+        // REGISTER
+        await authAPI.register(form.name, form.email, form.password);
+        toast.success("Account created! Please login");
+        setIsLogin(true);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Authentication failed");
+      console.log(err);
+      
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
 
   return (
@@ -141,8 +144,8 @@ navigate("/", { replace: true });
             {loading
               ? "Please wait..."
               : isLogin
-              ? "Login"
-              : "Sign up"}
+                ? "Login"
+                : "Sign up"}
           </button>
         </form>
 
