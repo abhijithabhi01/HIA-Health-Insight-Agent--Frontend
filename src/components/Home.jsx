@@ -6,6 +6,7 @@ import { chatAPI } from "../api/chat.api";
 import { analysisAPI } from "../api/analysis.api";
 import toast from 'react-hot-toast';
 import { confirmToast } from './ConfirmToast';
+import { LoadingFullScreen } from "./Loading";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -85,69 +86,78 @@ export default function Home() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // 🔥 UPDATED: Analyze uploaded file and save to chat
-  const analyzeFile = async (fileObj) => {
-    try {
-      setIsAnalyzing(true);
+// Analyze uploaded file and save to chat
+const analyzeFile = async (fileObj) => {
+  try {
+    setIsAnalyzing(true);
 
-      toast.loading('Analyzing your report...', { id: 'analyzing' });
-
-      // Create FormData and include chatId if exists
-      const formData = new FormData();
-      formData.append('file', fileObj.file);
-      if (currentChatId) {
-        formData.append('chatId', currentChatId);
+    // Show user message immediately with the uploaded file
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text: "📄 Uploaded medical report for analysis",
+        files: [{
+          id: fileObj.id,
+          name: fileObj.name,
+          type: fileObj.type,
+          url: fileObj.url
+        }]
       }
+    ]);
 
-      // Call upload API with chatId
-      const res = await analysisAPI.uploadAndAnalyze(fileObj.file, currentChatId);
+    toast.loading('Analyzing your report...', { id: 'analyzing' });
 
-      toast.success('Analysis complete!', { id: 'analyzing' });
+    // Call upload API with chatId
+    const res = await analysisAPI.uploadAndAnalyze(fileObj.file, currentChatId);
 
-      // Update currentChatId if it was created
-      if (res.data.chatId && !currentChatId) {
-        setCurrentChatId(res.data.chatId);
-      }
+    toast.success('Analysis complete!', { id: 'analyzing' });
 
-      // Add analysis result to messages with the saved image URL
-      const savedFile = {
-        id: fileObj.id,
-        name: res.data.fileName,
-        type: fileObj.type,
-        url: res.data.imageUrl || fileObj.url // Use saved data URL from backend
-      };
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "user",
-          text: "📄 Uploaded medical report for analysis",
-          files: [savedFile]
-        },
-        {
-          role: "assistant",
-          text: res.data.insight,
-          files: []
-        }
-      ]);
-
-      // Clear files
-      setFiles([]);
-
-    } catch (err) {
-      console.error('Analysis error:', err);
-      toast.error(err.response?.data?.error || 'Failed to analyze report', { id: 'analyzing' });
-    } finally {
-      setIsAnalyzing(false);
+    // Update currentChatId if it was created
+    if (res.data.chatId && !currentChatId) {
+      setCurrentChatId(res.data.chatId);
     }
-  };
+
+    // Add assistant response to messages
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        text: res.data.insight,
+        files: []
+      }
+    ]);
+
+    // Clean up blob URLs if needed
+    if (fileObj.url && fileObj.url.startsWith('blob:')) {
+      URL.revokeObjectURL(fileObj.url);
+    }
+
+  } catch (err) {
+    console.error('Analysis error:', err);
+    toast.error(err.response?.data?.error || 'Failed to analyze report', { id: 'analyzing' });
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
 
   // Send message (regular chat or with analysis)
   const sendMessage = async () => {
     // If there are files, trigger analysis instead of regular chat
     if (files.length > 0) {
-      // Analyze the first file (you can modify to handle multiple)
-      await analyzeFile(files[0]);
+      // Save file reference before clearing
+      const fileToAnalyze = files[0];
+      
+      // Clear files immediately to remove preview from input
+      setFiles([]);
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      // Analyze the file
+      await analyzeFile(fileToAnalyze);
       return;
     }
 
@@ -162,6 +172,7 @@ export default function Home() {
         const chatRes = await chatAPI.createChat("Health Insight Chat");
         chatId = chatRes.data._id;
         setCurrentChatId(chatId);
+        loadChat()
       }
 
       // Show user message
@@ -203,6 +214,7 @@ export default function Home() {
           setMessages([]);
           setCurrentChatId(null);
           toast.success("Chat deleted");
+          loadChat()
         } catch {
           toast.error("Failed to delete chat");
         }
@@ -279,9 +291,9 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-black text-gray-300">
       {/* SIDEBAR */}
-      <Sidebar
+     <Sidebar
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
+        toggleSidebar={toggleSidebar}
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
         currentChatId={currentChatId}
@@ -290,11 +302,12 @@ export default function Home() {
       {/* MAIN AREA */}
       <div className="flex flex-col flex-1 h-screen overflow-hidden">
         {/* Header */}
-        <header className="shrink-0 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={toggleSidebar}
-            className="lg:hidden p-2 hover:bg-zinc-800 rounded-lg"
-          >
+<header className="shrink-0 h-16 border-b border-zinc-800 px-4 flex items-center justify-between sticky top-0 bg-black z-40">
+  <button
+  onClick={toggleSidebar}
+  className="p-2 rounded-full hover:bg-zinc-800 transition"
+>
+
             <svg
               className="w-5 h-5 text-gray-300"
               fill="none"
@@ -325,7 +338,6 @@ export default function Home() {
             }}
           />
         </header>
-
         {/* Chat Area */}
         <section className="flex-1 overflow-y-auto px-4 py-6">
           {messages.length === 0 && (
@@ -349,7 +361,7 @@ export default function Home() {
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                <p>Upload a medical report image or PDF to get started</p>
+                <p>Upload a medical report image</p>
               </div>
             </div>
           )}
@@ -445,15 +457,17 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => fileInputRef.current.click()}
-                  className="
+                  disabled={isAnalyzing}
+                  className={`
     w-10 h-10
     flex items-center justify-center
     rounded-full
-    bg-zinc-800
-    text-gray-300
-    hover:bg-zinc-100 hover:text-gray-800
     transition
-  "
+    ${isAnalyzing 
+      ? "bg-zinc-900 text-gray-600 cursor-not-allowed" 
+      : "bg-zinc-800 text-gray-300 hover:bg-zinc-100 hover:text-gray-800"
+    }
+  `}
                   title="Upload medical report"
                 >
                   +
@@ -467,14 +481,16 @@ export default function Home() {
                   multiple
                   hidden
                   onChange={handleFileSelect}
+                  disabled={isAnalyzing}
                 />
 
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder={files.length > 0 ? "Press Enter to analyze..." : "Ask anything or upload a report"}
-                  className="flex-1 bg-transparent outline-none text-sm text-gray-200 placeholder-gray-500"
+                  onKeyDown={(e) => e.key === "Enter" && !isAnalyzing && sendMessage()}
+                  placeholder={isAnalyzing ? "Analyzing..." : (files.length > 0 ? "Press Enter to analyze..." : "Ask anything or upload a report")}
+                  disabled={isAnalyzing}
+                  className={`flex-1 bg-transparent outline-none text-sm text-gray-200 placeholder-gray-500 ${isAnalyzing ? 'cursor-not-allowed opacity-50' : ''}`}
                 />
                 <button
                   onClick={sendMessage}
@@ -486,7 +502,7 @@ export default function Home() {
                     transition
     ${(input.trim() || files.length > 0) && !isAnalyzing
                       ? "bg-blue-500 text-white hover:bg-blue-600"
-                      : "bg-zinc-800 text-gray-500"
+                      : "bg-zinc-800 text-gray-500 cursor-not-allowed"
                     }
   `}
                 >
