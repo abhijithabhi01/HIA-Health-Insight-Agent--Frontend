@@ -85,25 +85,44 @@ export default function Home() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  // 🔥 NEW: Analyze uploaded file
+  // 🔥 UPDATED: Analyze uploaded file and save to chat
   const analyzeFile = async (fileObj) => {
     try {
       setIsAnalyzing(true);
 
       toast.loading('Analyzing your report...', { id: 'analyzing' });
 
-      // Call upload API
-      const res = await analysisAPI.uploadAndAnalyze(fileObj.file);
+      // Create FormData and include chatId if exists
+      const formData = new FormData();
+      formData.append('file', fileObj.file);
+      if (currentChatId) {
+        formData.append('chatId', currentChatId);
+      }
+
+      // Call upload API with chatId
+      const res = await analysisAPI.uploadAndAnalyze(fileObj.file, currentChatId);
 
       toast.success('Analysis complete!', { id: 'analyzing' });
 
-      // Add analysis result to messages
+      // Update currentChatId if it was created
+      if (res.data.chatId && !currentChatId) {
+        setCurrentChatId(res.data.chatId);
+      }
+
+      // Add analysis result to messages with the saved image URL
+      const savedFile = {
+        id: fileObj.id,
+        name: res.data.fileName,
+        type: fileObj.type,
+        url: res.data.imageUrl || fileObj.url // Use saved data URL from backend
+      };
+
       setMessages((prev) => [
         ...prev,
         {
           role: "user",
           text: "📄 Uploaded medical report for analysis",
-          files: [fileObj]
+          files: [savedFile]
         },
         {
           role: "assistant",
@@ -243,39 +262,38 @@ export default function Home() {
           if (hasBold) {
             const parts = line.split(/\*\*(.*?)\*\*/g);
             return (
-              <div key={index}>
+              <p key={index}>
                 {parts.map((part, i) =>
                   i % 2 === 1 ? <strong key={i} className="font-semibold text-gray-200">{part}</strong> : part
                 )}
-              </div>
+              </p>
             );
           }
 
-          return <div key={index}>{line}</div>;
+          return <p key={index}>{line}</p>;
         })}
       </div>
     );
   };
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-gray-200">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-black text-gray-300">
+      {/* SIDEBAR */}
       <Sidebar
         isOpen={isSidebarOpen}
-        toggleSidebar={toggleSidebar}
-        currentChatId={currentChatId}
+        onClose={() => setIsSidebarOpen(false)}
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
+        currentChatId={currentChatId}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      {/* MAIN AREA */}
+      <div className="flex flex-col flex-1 h-screen overflow-hidden">
         {/* Header */}
-        <header className="h-14 border-b border-zinc-800 px-4 flex items-center justify-between">
+        <header className="shrink-0 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
           <button
             onClick={toggleSidebar}
-            className="p-2 rounded-full border border-zinc-700 hover:bg-zinc-800 transition"
-            title="Toggle sidebar"
+            className="lg:hidden p-2 hover:bg-zinc-800 rounded-lg"
           >
             <svg
               className="w-5 h-5 text-gray-300"
@@ -347,13 +365,13 @@ export default function Home() {
 
                   {msg.files && msg.files.length > 0 && (
                     <div className="flex gap-2 mt-3 flex-wrap">
-                      {msg.files.map((f) => (
+                      {msg.files.map((f, idx) => (
                         <div
-                          key={f.id}
+                          key={f.id || idx}
                           onClick={() => setPreview(f)}
                           className="cursor-pointer"
                         >
-                          {f.type === "image" ? (
+                          {f.type === "image" || f.type.startsWith('image') ? (
                             <img
                               src={f.url}
                               alt={f.name}
@@ -500,7 +518,7 @@ export default function Home() {
                 ✕
               </button>
 
-              {preview.type === "image" ? (
+              {preview.type === "image" || preview.type?.startsWith('image') ? (
                 <img
                   src={preview.url}
                   alt=""
