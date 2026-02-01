@@ -172,7 +172,6 @@ const analyzeFile = async (fileObj) => {
         const chatRes = await chatAPI.createChat("Health Insight Chat");
         chatId = chatRes.data._id;
         setCurrentChatId(chatId);
-        loadChat()
       }
 
       // Show user message

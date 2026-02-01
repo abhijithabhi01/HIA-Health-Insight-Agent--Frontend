@@ -18,7 +18,11 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   useEffect(() => {
     loadChats();
   }, []);
-
+  useEffect(() => {
+    if (currentChatId) {
+      loadChats();
+    }
+  }, [currentChatId]);
   // Load user's chats
   const loadChats = async () => {
     try {
@@ -32,7 +36,7 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   // Handle search
   const handleSearch = async (query) => {
     setSearchQuery(query);
-    
+
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -52,10 +56,12 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
     try {
       // Call the parent's new chat handler
       await onNewChat();
-      
+
       // Reload chats to show the new one
+    setTimeout(async () => {
       await loadChats();
-      
+    }, 100);
+
       // Close sidebar on mobile
       if (window.innerWidth < 1024) {
         toggleSidebar();
@@ -68,22 +74,22 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   // Handle chat deletion with toast confirmation
   const handleDeleteChat = async (chatId, e) => {
     e?.stopPropagation();
-    
+
     confirmToast(
       'Are you sure you want to delete this chat?',
       async () => {
         try {
           await chatAPI.deleteChat(chatId);
           toast.success('Chat deleted');
-          
+
           // Reload chats
           await loadChats();
-          
+
           // If deleted chat was active, clear it
           if (currentChatId === chatId) {
             await onNewChat();
           }
-          
+
           setOpenMenuId(null);
         } catch (err) {
           console.error('Failed to delete chat:', err);
@@ -103,31 +109,31 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   };
 
   // Handle chat rename
-const handleRenameChat = async () => {
-  if (!newChatTitle.trim()) {
-    toast.error('Chat title cannot be empty');
-    return;
-  }
+  const handleRenameChat = async () => {
+    if (!newChatTitle.trim()) {
+      toast.error('Chat title cannot be empty');
+      return;
+    }
 
-  try {
-    await chatAPI.renameChat(renameChatId, newChatTitle);
+    try {
+      await chatAPI.renameChat(renameChatId, newChatTitle);
 
-    toast.success('Chat renamed');
-    await loadChats();
-    setRenameModalOpen(false);
-    setRenameChatId(null);
-    setNewChatTitle('');
-  } catch (err) {
-    console.error('Failed to rename chat:', err);
-    toast.error('Failed to rename chat');
-  }
-};
+      toast.success('Chat renamed');
+      await loadChats();
+      setRenameModalOpen(false);
+      setRenameChatId(null);
+      setNewChatTitle('');
+    } catch (err) {
+      console.error('Failed to rename chat:', err);
+      toast.error('Failed to rename chat');
+    }
+  };
 
 
   // Handle chat selection
   const handleChatSelect = (chatId) => {
     onChatSelect(chatId);
-    
+
     // Close sidebar on mobile
     if (window.innerWidth < 1024) {
       toggleSidebar();
@@ -155,7 +161,7 @@ const handleRenameChat = async () => {
 
     chats.forEach(chat => {
       const chatDate = new Date(chat.updatedAt);
-      
+
       if (chatDate >= today) {
         grouped.today.push(chat);
       } else if (chatDate >= yesterday) {
@@ -410,7 +416,7 @@ const handleRenameChat = async () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="relative w-full max-w-md bg-zinc-900 rounded-2xl shadow-xl p-6">
             <h2 className="text-lg font-semibold mb-4">Rename Chat</h2>
-            
+
             <input
               type="text"
               value={newChatTitle}
@@ -474,19 +480,17 @@ function ChatItem({ chat, isActive, onClick, onDelete, onRename, isMenuOpen, onM
   return (
     <div
       onClick={onClick}
-      className={`group relative px-3 py-2 rounded hover:bg-zinc-900 cursor-pointer text-sm transition flex items-center justify-between ${
-        isActive ? 'bg-zinc-800 text-white' : 'text-gray-300'
-      }`}
+      className={`group relative px-3 py-2 rounded hover:bg-zinc-900 cursor-pointer text-sm transition flex items-center justify-between ${isActive ? 'bg-zinc-800 text-white' : 'text-gray-300'
+        }`}
       title={chat.title}
     >
       <span className="truncate flex-1">{chat.title}</span>
-      
+
       {/* Menu Button - Shows on hover or when active */}
       <button
         onClick={onMenuToggle}
-        className={`p-1 rounded hover:bg-zinc-700 transition ${
-          isMenuOpen || isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-        }`}
+        className={`p-1 rounded hover:bg-zinc-700 transition ${isMenuOpen || isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
       >
         <MoreVertical size={16} />
       </button>
