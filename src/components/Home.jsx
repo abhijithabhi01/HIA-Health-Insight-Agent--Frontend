@@ -22,6 +22,12 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     return window.innerWidth >= 1024;
   });
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Function to trigger sidebar refresh
+  const refreshSidebarChats = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   // Toggle sidebar
   const toggleSidebar = () => {
@@ -213,7 +219,7 @@ const analyzeFile = async (fileObj) => {
           setMessages([]);
           setCurrentChatId(null);
           toast.success("Chat deleted");
-          loadChat()
+          refreshSidebarChats(); // Trigger sidebar to reload chats
         } catch {
           toast.error("Failed to delete chat");
         }
@@ -296,6 +302,7 @@ const analyzeFile = async (fileObj) => {
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
         currentChatId={currentChatId}
+        refreshTrigger={refreshTrigger}
       />
 
       {/* MAIN AREA */}

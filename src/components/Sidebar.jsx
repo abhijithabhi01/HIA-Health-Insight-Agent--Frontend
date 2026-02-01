@@ -4,7 +4,7 @@ import { chatAPI } from '../api/chat.api';
 import toast from 'react-hot-toast';
 import { confirmToast } from './ConfirmToast';
 
-export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSelect, onNewChat }) {
+export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSelect, onNewChat, refreshTrigger }) {
   const [chats, setChats] = useState([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,11 +18,20 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
   useEffect(() => {
     loadChats();
   }, []);
+  
+  // Reload chats when currentChatId changes
   useEffect(() => {
     if (currentChatId) {
       loadChats();
     }
   }, [currentChatId]);
+
+  // Reload chats when refreshTrigger changes (e.g., after delete)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      loadChats();
+    }
+  }, [refreshTrigger]);
   // Load user's chats
   const loadChats = async () => {
     try {
