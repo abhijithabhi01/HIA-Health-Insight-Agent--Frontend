@@ -4,9 +4,8 @@ import toast from "react-hot-toast";
 import { LogIn, LogOut, Trash2, Share2, User, X } from "lucide-react";
 import { confirmToast } from "./ConfirmToast";
 import { authAPI } from "../api/auth.api";
-import axios from "axios";
 
-export default function UserMenu({ onDeleteChat, onShareChat }) {
+export default function UserMenu({ onDeleteChat }) {
   const [open, setOpen] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -17,23 +16,20 @@ export default function UserMenu({ onDeleteChat, onShareChat }) {
   const isAuthenticated = !!localStorage.getItem("token");
 
   // Fetch user profile
-  const fetchProfile = async () => {
-    if (!isAuthenticated) return;
-    
-    setLoadingProfile(true);
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/auth/profile", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUserProfile(response.data);
-    } catch (err) {
-      console.error("Failed to fetch profile:", err);
-      toast.error("Failed to load profile");
-    } finally {
-      setLoadingProfile(false);
-    }
-  };
+const fetchProfile = async () => {
+  if (!isAuthenticated) return;
+  
+  setLoadingProfile(true);
+  try {
+    const response = await authAPI.getProfile();
+    setUserProfile(response.data);
+  } catch (err) {
+    console.error("Failed to fetch profile:", err);
+    toast.error("Failed to load profile");
+  } finally {
+    setLoadingProfile(false);
+  }
+};
 
   // Handle account deletion
   function handleDeleteAccount() {
@@ -106,12 +102,7 @@ export default function UserMenu({ onDeleteChat, onShareChat }) {
                   <User size={16} /> Profile
                 </button>
 
-                <button
-                  onClick={onShareChat}
-                  className="flex items-center gap-2 w-full px-4 py-3 text-sm hover:bg-zinc-800 border-none focus:outline-none focus:ring-0"
-                >
-                  <Share2 size={16} /> Share Chat
-                </button>
+
 
                 <button
                   onClick={onDeleteChat}

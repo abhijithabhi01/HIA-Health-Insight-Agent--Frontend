@@ -19,6 +19,7 @@ export default function Home() {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     return window.innerWidth >= 1024;
   });
@@ -36,6 +37,7 @@ export default function Home() {
 
   // Load specific chat by ID
   const loadChat = async (chatId) => {
+          setIsLoading(true);
     try {
       const res = await chatAPI.getChatById(chatId);
       setCurrentChatId(res.data._id);
@@ -51,6 +53,7 @@ export default function Home() {
       console.error('Failed to load chat:', err);
       toast.error('Failed to load chat');
     }
+    setIsLoading(false);
   };
 
   // Handle chat selection from sidebar
@@ -92,60 +95,60 @@ export default function Home() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-// Analyze uploaded file and save to chat
-const analyzeFile = async (fileObj) => {
-  try {
-    setIsAnalyzing(true);
+  // Analyze uploaded file and save to chat
+  const analyzeFile = async (fileObj) => {
+    try {
+      setIsAnalyzing(true);
 
-    // Show user message immediately with the uploaded file
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        text: "📄 Uploaded medical report for analysis",
-        files: [{
-          id: fileObj.id,
-          name: fileObj.name,
-          type: fileObj.type,
-          url: fileObj.url
-        }]
+      // Show user message immediately with the uploaded file
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "user",
+          text: "📄 Uploaded medical report for analysis",
+          files: [{
+            id: fileObj.id,
+            name: fileObj.name,
+            type: fileObj.type,
+            url: fileObj.url
+          }]
+        }
+      ]);
+
+      toast.loading('Analyzing your report...', { id: 'analyzing' });
+
+      // Call upload API with chatId
+      const res = await analysisAPI.uploadAndAnalyze(fileObj.file, currentChatId);
+
+      toast.success('Analysis complete!', { id: 'analyzing' });
+
+      // Update currentChatId if it was created
+      if (res.data.chatId && !currentChatId) {
+        setCurrentChatId(res.data.chatId);
       }
-    ]);
 
-    toast.loading('Analyzing your report...', { id: 'analyzing' });
+      // Add assistant response to messages
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: res.data.insight,
+          files: []
+        }
+      ]);
 
-    // Call upload API with chatId
-    const res = await analysisAPI.uploadAndAnalyze(fileObj.file, currentChatId);
-
-    toast.success('Analysis complete!', { id: 'analyzing' });
-
-    // Update currentChatId if it was created
-    if (res.data.chatId && !currentChatId) {
-      setCurrentChatId(res.data.chatId);
-    }
-
-    // Add assistant response to messages
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "assistant",
-        text: res.data.insight,
-        files: []
+      // Clean up blob URLs if needed
+      if (fileObj.url && fileObj.url.startsWith('blob:')) {
+        URL.revokeObjectURL(fileObj.url);
       }
-    ]);
 
-    // Clean up blob URLs if needed
-    if (fileObj.url && fileObj.url.startsWith('blob:')) {
-      URL.revokeObjectURL(fileObj.url);
+    } catch (err) {
+      console.error('Analysis error:', err);
+      toast.error(err.response?.data?.error || 'Failed to analyze report', { id: 'analyzing' });
+    } finally {
+      setIsAnalyzing(false);
     }
-
-  } catch (err) {
-    console.error('Analysis error:', err);
-    toast.error(err.response?.data?.error || 'Failed to analyze report', { id: 'analyzing' });
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
+  };
 
   // Send message (regular chat or with analysis)
   const sendMessage = async () => {
@@ -153,15 +156,15 @@ const analyzeFile = async (fileObj) => {
     if (files.length > 0) {
       // Save file reference before clearing
       const fileToAnalyze = files[0];
-      
+
       // Clear files immediately to remove preview from input
       setFiles([]);
-      
+
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      
+
       // Analyze the file
       await analyzeFile(fileToAnalyze);
       return;
@@ -296,7 +299,7 @@ const analyzeFile = async (fileObj) => {
   return (
     <div className="flex h-screen bg-black text-gray-300">
       {/* SIDEBAR */}
-     <Sidebar
+      <Sidebar
         isOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
         onChatSelect={handleChatSelect}
@@ -308,11 +311,11 @@ const analyzeFile = async (fileObj) => {
       {/* MAIN AREA */}
       <div className="flex flex-col flex-1 h-screen overflow-hidden">
         {/* Header */}
-<header className="shrink-0 h-16 border-b border-zinc-800 px-4 flex items-center justify-between sticky top-0 bg-black z-40">
-  <button
-  onClick={toggleSidebar}
-  className="p-2 rounded-full hover:bg-zinc-800 transition"
->
+        <header className="shrink-0 h-16 border-b border-zinc-800 px-4 flex items-center justify-between sticky top-0 bg-black z-40">
+          <button
+            onClick={toggleSidebar}
+            className="p-2 rounded-full hover:bg-zinc-800 transition"
+          >
 
             <svg
               className="w-5 h-5 text-gray-300"
@@ -338,15 +341,18 @@ const analyzeFile = async (fileObj) => {
 
           <UserMenu
             onDeleteChat={handleDeleteChat}
-            onShareChat={() => {
-              navigator.clipboard.writeText(window.location.href);
-              toast.success('Link copied to clipboard');
-            }}
+
           />
         </header>
         {/* Chat Area */}
         <section className="flex-1 overflow-y-auto px-4 py-6">
-          {messages.length === 0 && (
+  {isLoading ? (
+    <div className="h-full flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>
+  ) : (
+    <>
+           {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center gap-6">
               <h1 className="text-3xl font-light text-gray-300 text-center">
                 Simplifying your health data into meaningful insights.
@@ -418,7 +424,9 @@ const analyzeFile = async (fileObj) => {
 
             <div ref={bottomRef} />
           </div>
-        </section>
+    </>
+  )}
+</section>
 
         {/* Footer */}
         <footer className="shrink-0 border-t border-zinc-800 px-4 py-4">
@@ -469,10 +477,10 @@ const analyzeFile = async (fileObj) => {
     flex items-center justify-center
     rounded-full
     transition
-    ${isAnalyzing 
-      ? "bg-zinc-900 text-gray-600 cursor-not-allowed" 
-      : "bg-zinc-800 text-gray-300 hover:bg-zinc-100 hover:text-gray-800"
-    }
+    ${isAnalyzing
+                      ? "bg-zinc-900 text-gray-600 cursor-not-allowed"
+                      : "bg-zinc-800 text-gray-300 hover:bg-zinc-100 hover:text-gray-800"
+                    }
   `}
                   title="Upload medical report"
                 >
@@ -483,7 +491,7 @@ const analyzeFile = async (fileObj) => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept="image/*"
                   multiple
                   hidden
                   onChange={handleFileSelect}

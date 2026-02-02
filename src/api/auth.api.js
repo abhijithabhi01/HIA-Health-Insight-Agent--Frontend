@@ -9,6 +9,8 @@ export const authAPI = {
 
   deleteAccount: () => client.delete("/auth/delete"),
 
+  getProfile: () => client.get("/auth/profile"),
+
   logout: () => {
     localStorage.removeItem("token");
     window.location.href = "/auth";
