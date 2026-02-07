@@ -1,7 +1,8 @@
 import axios from "axios";
+import { baseURL } from "./BASEURL";
 
 const client = axios.create({
-  baseURL: "https://hia-health-insight-agent-backend.onrender.com",
+  baseURL: baseURL,
   headers: {
     "Content-Type": "application/json",
   },

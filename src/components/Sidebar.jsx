@@ -197,8 +197,7 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={toggleSidebar}
-        />
+          onClick={() => toggleSidebar()}        />
       )}
 
       <aside
@@ -210,16 +209,20 @@ export default function Sidebar({ isOpen, toggleSidebar, currentChatId, onChatSe
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2 font-medium">
-              <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-sm">
+          <div className="p-4 flex items-center justify-between border-b border-zinc-800/50">
+            <div className="flex items-center gap-2 font-medium text-gray-200">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 rounded-xl flex items-center justify-center text-sm font-bold shadow-lg shadow-blue-500/20">
                 HIA
               </div>
-              Health Insight Agent
+              <span className="text-sm">Health Insight Agent</span>
             </div>
-            <button onClick={toggleSidebar} className="lg:hidden">
-              <X />
-            </button>
+            <button 
+  onClick={toggleSidebar} 
+  className="lg:hidden p-2 rounded-lg hover:bg-zinc-800/80 transition-all duration-200 text-gray-400 hover:text-white active:scale-95"
+  aria-label="Close sidebar"
+>
+  <X className="w-5 h-5" />
+</button>
           </div>
 
           {/* Menu */}

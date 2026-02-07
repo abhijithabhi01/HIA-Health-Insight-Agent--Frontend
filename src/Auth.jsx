@@ -3,6 +3,13 @@ import { Mail, Lock, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { authAPI } from "./api/auth.api";
+import { baseURL } from "./api/BASEURL";
+
+const ADMIN_EMAILS = [
+  'admin@healthinsight.com',
+  'admin@hia.com',
+  'superadmin@healthinsight.com'
+];
 
 export default function Auth({ setIsAuth }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -21,6 +28,11 @@ export default function Auth({ setIsAuth }) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
+  // Check if email is an admin email
+  const isAdminEmail = (email) => {
+    return ADMIN_EMAILS.includes(email.toLowerCase().trim());
+  };
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -34,20 +46,48 @@ export default function Auth({ setIsAuth }) {
       return;
     }
 
+    // Check if admin email - redirect to backend admin panel
+if (isLogin && isAdminEmail(form.email)) {
+  // Show toast first
+  toast.success("Opening Admin Panel in new tab...", {
+    duration: 2000,
+  });
+  
+  // Wait for toast to be visible before opening new tab
+  setTimeout(() => {
+    window.open(`${baseURL}/admin-panel/login`, '_blank');
+    
+    // Clear the form after opening
+    setForm({
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    });
+  }, 1500); // 1.5 second delay
+  
+  return; // Stop execution here - no API calls
+}
+
     try {
       setLoading(true);
 
       if (isLogin) {
-        // LOGIN
+        // LOGIN (only for non-admin users)
         const res = await authAPI.login(form.email, form.password);
         localStorage.setItem("token", res.data.token);
         setIsAuth(true);
         toast.success("Login successful");
         navigate("/", { replace: true });
 
-
       } else {
         // REGISTER
+        // Prevent admin email registration
+        if (isAdminEmail(form.email)) {
+          toast.error("This email is reserved for administrators. Please use a different email.");
+          return;
+        }
+        
         await authAPI.register(form.name, form.email, form.password);
         toast.success("Account created! Please login");
         setIsLogin(true);
@@ -55,7 +95,7 @@ export default function Auth({ setIsAuth }) {
     } catch (err) {
       toast.error(err.response?.data?.error || "Authentication failed");
       console.log(err);
-      
+
     } finally {
       setLoading(false);
     }

@@ -2,28 +2,28 @@ import client from "./client";
 
 export const chatAPI = {
   // Create new chat
-  createChat: (title) => client.post("/chats", { title }),
+  createChat: (title) => client.post("/chat/chats", { title }),
 
   // Send message
   sendMessage: (chatId, message) =>
-    client.post(`/chats/${chatId}/messages`, { message }),
+    client.post(`/chat/chats/${chatId}/messages`, { message }),
 
   // Get all chats
-  getAllChats: () => client.get("/chats"),
+  getAllChats: () => client.get("/chat/chats"),
 
   // Get specific chat by ID
-  getChatById: (chatId) => client.get(`/chats/${chatId}`),
+  getChatById: (chatId) => client.get(`/chat/chats/${chatId}`),
 
   // Update chat (rename)
-  updateChat: (chatId, data) => client.put(`/chats/${chatId}`, data),
+  updateChat: (chatId, data) => client.put(`/chat/chats/${chatId}`, data),
 
   // Search chats
-  searchChats: (query) => client.get(`/chats/search?q=${encodeURIComponent(query)}`),
+  searchChats: (query) => client.get(`/chat/chats/search?q=${encodeURIComponent(query)}`),
 
   // Delete chat
-  deleteChat: (chatId) => client.delete(`/chats/${chatId}`),
+  deleteChat: (chatId) => client.delete(`/chat/chats/${chatId}`),
+  
   // Rename chat
   renameChat: (chatId, title) =>
-    client.put(`/chats/${chatId}/rename`, { title }),
-
+    client.put(`/chat/chats/${chatId}/rename`, { title }),
 };
