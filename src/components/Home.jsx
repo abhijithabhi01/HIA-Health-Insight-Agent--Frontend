@@ -440,35 +440,70 @@ export default function Home() {
       setIsGeneratingPDF(false);
     }
   };
-  // Parse and highlight abnormal values in lab reports
-  const highlightAbnormalValues = (text, role) => {
-    if (role !== 'HC' && role !== 'ADMIN') return text;
-
-    // Regex patterns for lab values with reference ranges
-    const patterns = [
-      /(\*\*[^*]+\*\*:\s*)(\d+\.?\d*)\s*([a-zA-Z/µ]+)\s*-\s*(NORMAL|LOW|HIGH)/gi,
-      /(\*\*[^*]+\*\*:\s*)(\d+\.?\d*)\s*([a-zA-Z/µ]+)/gi
-    ];
+  // Helper function to highlight abnormal values (HC mode only)
+  const highlightAbnormalValues = (text) => {
+    if (userRole !== 'HC' && userRole !== 'ADMIN') return text;
 
     let result = text;
 
-    // Add color coding for abnormal markers
-    result = result.replace(/- (LOW|HIGH)\b/gi, (match, status) => {
-      if (status.toUpperCase() === 'HIGH') {
-        return `<span class="text-red-400 font-semibold">- ${status}</span>`;
-      } else if (status.toUpperCase() === 'LOW') {
-        return `<span class="text-yellow-400 font-semibold">- ${status}</span>`;
-      }
-      return match;
-    });
+    // FIRST: Remove all ** markdown formatting since we're using HTML
+    result = result.replace(/\*\*/g, '');
 
-    // Highlight the value itself if abnormal
+    // Pattern 1: Highlight HIGH values in red
     result = result.replace(
-      /(\*\*[^*]+\*\*:\s*)(\d+\.?\d*\s*[a-zA-Z/µ]+)\s*-\s*(LOW|HIGH)/gi,
-      (match, label, value, status) => {
-        const color = status.toUpperCase() === 'HIGH' ? 'text-red-400' : 'text-yellow-400';
-        return `${label}<span class="${color} font-bold">${value}</span> - <span class="${color} font-semibold">${status}</span>`;
+      /([A-Za-z\s]+):\s*([0-9,.]+\s*[a-zA-Z/µ%°]+(?:\/[a-zA-Z/µ]+)?)\s*-\s*HIGH/gi,
+      (match, label, value) => {
+        return `<strong>${label}:</strong> <span style="color: #ef4444; font-weight: 700;">${value}</span> - <span style="color: #ef4444; font-weight: 700; text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);">HIGH</span>`;
       }
+    );
+
+    // Pattern 2: Highlight LOW values in yellow
+    result = result.replace(
+      /([A-Za-z\s]+):\s*([0-9,.]+\s*[a-zA-Z/µ%°]+(?:\/[a-zA-Z/µ]+)?)\s*-\s*LOW/gi,
+      (match, label, value) => {
+        return `<strong>${label}:</strong> <span style="color: #f59e0b; font-weight: 700;">${value}</span> - <span style="color: #f59e0b; font-weight: 700; text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);">LOW</span>`;
+      }
+    );
+
+    // Pattern 3: Highlight BORDERLINE values in orange
+    result = result.replace(
+      /([A-Za-z\s]+):\s*([0-9,.]+\s*[a-zA-Z/µ%°]+(?:\/[a-zA-Z/µ]+)?)\s*-\s*BORDERLINE/gi,
+      (match, label, value) => {
+        return `<strong>${label}:</strong> <span style="color: #fb923c; font-weight: 700;">${value}</span> - <span style="color: #fb923c; font-weight: 700; text-shadow: 0 0 10px rgba(251, 146, 60, 0.3);">BORDERLINE</span>`;
+      }
+    );
+
+    // Pattern 4: Format NORMAL values with bold labels
+    result = result.replace(
+      /([A-Za-z\s]+):\s*([0-9,.]+\s*[a-zA-Z/µ%°]+(?:\/[a-zA-Z/µ]+)?)\s*-\s*NORMAL/gi,
+      (match, label, value) => {
+        return `<strong>${label}:</strong> ${value} - NORMAL`;
+      }
+    );
+
+    // Format emoji section headers
+    result = result.replace(
+      /([📊🧬🧠❤️💉🩺])\s*([^\n]+)/g,
+      (match, emoji, title) => {
+        return `${emoji} <strong style="font-size: 1.1em;">${title}</strong>`;
+      }
+    );
+
+    // Format clinical notes with proper spacing
+    result = result.replace(
+      /└\s*Clinical Note:/g,
+      '<div style="margin-left: 1.5rem; margin-top: 0.25rem; color: #9ca3af; font-style: italic;">└ Clinical Note:'
+    );
+
+    result = result.replace(
+      /(Recommend:)/g,
+      '<span style="font-weight: 600; color: #60a5fa;">$1</span>'
+    );
+
+    // Close clinical note divs
+    result = result.replace(
+      /Clinical Note:([^•]+)/g,
+      'Clinical Note:$1</div>'
     );
 
     return result;
@@ -617,13 +652,41 @@ export default function Home() {
                       <div className="max-w-[85%] flex flex-col gap-3">
                         <div className={`${isUser ? 'bg-gradient-to-br from-blue-600 to-blue-700 shadow-lg shadow-blue-900/30' : 'bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/50'} px-5 py-4 rounded-2xl ${isUser ? 'rounded-tr-md' : 'rounded-tl-md'} transition-all duration-200 hover:shadow-xl`}>
                           {isHCMessage && (userRole === 'HC' || userRole === 'ADMIN') ? (
-                            <div
-                              className={`text-sm leading-relaxed whitespace-pre-wrap ${isUser ? 'text-white font-medium' : 'text-gray-200'}`}
-                              dangerouslySetInnerHTML={{ __html: highlightAbnormalValues(mainContent) }}
-                            />
+                            <div className={`text-sm leading-relaxed ${isUser ? 'text-white font-medium' : 'text-gray-200'}`}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkBreaks]}
+                                components={{
+                                  p: ({ node, ...props }) => <p className="mb-3" {...props} />,
+                                  ul: ({ node, ...props }) => <ul className="space-y-2 ml-4" {...props} />,
+                                  li: ({ node, ...props }) => <li className="mb-2" {...props} />,
+                                  strong: ({ node, children, ...props }) => {
+                                    // Check if this is a HIGH/LOW value and color it
+                                    const text = children?.toString() || '';
+                                    if (text.includes('HIGH')) {
+                                      return <strong className="font-bold text-red-400" {...props}>{children}</strong>;
+                                    } else if (text.includes('LOW')) {
+                                      return <strong className="font-bold text-yellow-400" {...props}>{children}</strong>;
+                                    } else if (text.includes('BORDERLINE')) {
+                                      return <strong className="font-bold text-orange-400" {...props}>{children}</strong>;
+                                    }
+                                    return <strong className="font-bold" {...props}>{children}</strong>;
+                                  }
+                                }}
+                              >
+                                {mainContent}
+                              </ReactMarkdown>
+                            </div>
                           ) : (
-                            <div className={`text-sm leading-relaxed whitespace-pre-wrap ${isUser ? 'text-white font-medium' : 'text-gray-200'}`}>
-                              <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                            <div className={`text-sm leading-relaxed ${isUser ? 'text-white font-medium' : 'text-gray-200'}`}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkBreaks]}
+                                components={{
+                                  p: ({ node, ...props }) => <p className="mb-3" {...props} />,
+                                  ul: ({ node, ...props }) => <ul className="space-y-2 ml-4" {...props} />,
+                                  li: ({ node, ...props }) => <li className="mb-2" {...props} />,
+                                  strong: ({ node, ...props }) => <strong className="font-bold" {...props} />
+                                }}
+                              >
                                 {mainContent}
                               </ReactMarkdown>
                             </div>
