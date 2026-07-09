@@ -10,6 +10,7 @@ import { LoadingFullScreen } from "./Loading";
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import jsPDF from 'jspdf';
+import { baseURL } from "../api/BASEURL";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -36,7 +37,7 @@ export default function Home() {
     const fetchUserProfile = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/auth/profile', {
+        const response = await fetch(`${baseURL}/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -357,7 +358,7 @@ export default function Home() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch('http://localhost:5000/auth/profile', {
+        const response = await fetch(`${baseURL}/auth/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
